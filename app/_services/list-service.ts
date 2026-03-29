@@ -1,5 +1,5 @@
+import axiosInstance from "./axiosInstance";
 import axios from "axios";
-import { API_URL } from "./auth-service";
 import { ApiErrorResponse } from "./types";
 
 export type List = {
@@ -9,62 +9,33 @@ export type List = {
 };
 
 export async function getListsByBoardId(boardId: string): Promise<List[]> {
-  // const lists: List[] = JSON.parse(localStorage.getItem("lists") || "[]") as List[];
-  // return lists.filter((list) => list.boardId === Number(boardId));
-
   try {
-    const res = await axios.get(`${API_URL}lists/${boardId}`, {
-      withCredentials: true,
-    });
-
+    const res = await axiosInstance.get(`lists/${boardId}`);
     return res.data;
   } catch (err: unknown) {
     let errorMessage = "Failed to get lists";
-
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }
 
 export async function createList(boardId: string, name: string): Promise<List> {
-  // const lists: List[] = JSON.parse(
-  //   localStorage.getItem("lists") || "[]",
-  // ) as List[];
-
-  // const newList: List = {
-  //   id: Math.floor(Date.now() + Math.random()),
-  //   boardId: Number(boardId),
-  //   name,
-  // };
-
-  // lists.push(newList);
-  // localStorage.setItem("lists", JSON.stringify(lists));
-
-  // return newList;
-
   try {
-    const res = await axios.post(
-      API_URL + "lists",
-      { boardId, name },
-      { withCredentials: true },
-    );
+    const res = await axiosInstance.post("lists", { boardId, name });
     return res.data;
   } catch (err: unknown) {
-    let errorMessage = "Failed to create lists";
-
+    let errorMessage = "Failed to create list";
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }
@@ -73,71 +44,33 @@ export async function updateList(
   listId: string,
   updatedData: Partial<Pick<List, "name" | "boardId">>,
 ): Promise<boolean> {
-  // const lists: List[] = JSON.parse(
-  //   localStorage.getItem("lists") || "[]",
-  // ) as List[];
-
-  // const listIndex = lists.findIndex((list) => list.id === Number(listId));
-  // if (listIndex !== -1) {
-  //   lists[listIndex] = { ...lists[listIndex], ...updatedData };
-  //   localStorage.setItem("lists", JSON.stringify(lists));
-  //   return lists[listIndex];
-  // }
-
-  // return null;
-
   try {
-    const res = await axios.put(`${API_URL}lists/${listId}`, updatedData, {
-      withCredentials: true,
-    });
-
-    if (res.status === 200) {
-      return true;
-    } else {
-      return false;
-    }
+    const res = await axiosInstance.put(`lists/${listId}`, updatedData);
+    return res.status === 200;
   } catch (err: unknown) {
-    let errorMessage = "Failed to create lists";
-
+    let errorMessage = "Failed to update list";
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }
 
 export async function deleteList(listId: number | string): Promise<boolean> {
-  // let lists: List[] = JSON.parse(
-  //   localStorage.getItem("lists") || "[]",
-  // ) as List[];
-  // lists = lists.filter((list) => list.id !== Number(listId));
-  // localStorage.setItem("lists", JSON.stringify(lists));
-  // return true;
-
   try {
-    const res = await axios.delete(`${API_URL}lists/${listId}`, {
-      withCredentials: true,
-    });
-
-    if (res.status === 200) {
-      return true;
-    } else {
-      return false;
-    }
+    const res = await axiosInstance.delete(`lists/${listId}`);
+    return res.status === 200;
   } catch (err: unknown) {
-    let errorMessage = "Failed to create lists";
-
+    let errorMessage = "Failed to delete list";
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }

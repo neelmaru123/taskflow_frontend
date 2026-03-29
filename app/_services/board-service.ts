@@ -1,109 +1,76 @@
+import axiosInstance from "./axiosInstance";
 import axios from "axios";
 import { ApiErrorResponse } from "./types";
-import { API_URL } from "./auth-service";
 
-type Board = {
+export type Board = {
   id: string;
   title: string;
-  userId: number;
+  userId: string;
 };
 
 export async function getAllBoards(userId: string): Promise<Board[]> {
   try {
-    const res = await axios.get(`${API_URL}boards/${userId}`, {
-      withCredentials: true,
-    });
-
+    const res = await axiosInstance.get(`boards/${userId}`);
     return res.data;
   } catch (err: unknown) {
-    let errorMessage = "Failed get all boards ";
-
+    let errorMessage = "Failed to get boards";
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }
 
-// export function getBoardById(boardId: number | string): Board | undefined {
-//   const boards = (JSON.parse(localStorage.getItem("boards")) as Board[]) || [];
-//   return boards.find((board: Board) => board.id === Number(boardId));
-// }
-
 export async function addBoard(title: string, userId: string): Promise<Board> {
   try {
-    const res = await axios.post(
-      API_URL + "boards",
-      { title, userId },
-      { withCredentials: true },
-    );
-
+    const res = await axiosInstance.post("boards", { title, userId });
     return res.data;
   } catch (err: unknown) {
-    let errorMessage = "Failed to add boards";
-
+    let errorMessage = "Failed to create board";
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }
 
 export async function updateBoard(
-  boardId: string | string,
+  boardId: string,
   updatedData: Partial<Pick<Board, "title" | "userId">>,
 ): Promise<Board | null> {
   try {
-    const res = await axios.put(`${API_URL}boards/${boardId}`, updatedData, {
-      withCredentials: true,
-    });
-
+    const res = await axiosInstance.put(`boards/${boardId}`, updatedData);
     return res.data;
   } catch (err: unknown) {
-    let errorMessage = "Failed to update boards";
-
+    let errorMessage = "Failed to update board";
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }
 
-export async function deleteBoardService(
-  boardId: number | string,
-): Promise<boolean> {
+export async function deleteBoardService(boardId: string): Promise<boolean> {
   try {
-    const res = await axios.delete(`${API_URL}boards/${boardId}`, {
-      withCredentials: true,
-    });
-
-    if (res.status === 200) {
-      return true;
-    } else {
-      return false;
-    }
+    const res = await axiosInstance.delete(`boards/${boardId}`);
+    return res.status === 200;
   } catch (err: unknown) {
-    let errorMessage = "Failed to update boards";
-
+    let errorMessage = "Failed to delete board";
     if (axios.isAxiosError(err)) {
       const data = err.response?.data as ApiErrorResponse;
       errorMessage = data?.message || errorMessage;
     } else if (err instanceof Error) {
       errorMessage = err.message;
     }
-
     throw new Error(errorMessage);
   }
 }

@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
   ReactNode,
+  useRef,
 } from "react";
 import { getUserByToken } from "../_services/user.service";
 import toast from "react-hot-toast";
@@ -15,86 +16,72 @@ import {
   deleteBoardService,
   getAllBoards,
   updateBoard,
+  type Board,
 } from "../_services/board-service";
-import { fetchBoardByUserId } from "../_services/member-service";
+import {
+  fetchBoardByUserId,
+  type MemberBoard,
+} from "../_services/member-service";
 
 /* ---------- TYPES ---------- */
-
-type Board = {
-  id: string;
-  title: string;
-  userId: number;
-};
 
 type User = {
   id: string;
   email: string;
-  password: string;
   username?: string;
 };
 
 type UseBoardsContext = {
   boards: Board[];
   setBoards: React.Dispatch<React.SetStateAction<Board[]>>;
-  updateBoardTitle: (boardId: string, title: string) => Promise<undefined>;
+  updateBoardTitle: (boardId: string, title: string) => Promise<void>;
   createBoard: (title: string) => Promise<Board | undefined>;
   activeBoard: string | null;
   setActiveBoard: React.Dispatch<React.SetStateAction<string | null>>;
   deleteBoard: (boardId: string) => Promise<boolean>;
-  user: User;
+  user: User | null;
   fetchUser: () => Promise<void>;
   loading: boolean;
   logoutUser: () => Promise<void>;
-  memberBoards: Board[];
+  memberBoards: MemberBoard[];
 };
 
 const BoardContext = createContext<UseBoardsContext | undefined>(undefined);
 
-function safeJSONParse<T>(value: string | null): T | null {
-  try {
-    return value ? (JSON.parse(value) as T) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function BoardProvider({ children }: { children: ReactNode }) {
   const [boards, setBoards] = useState<Board[]>([]);
-  const [memberBoards, setMemberBoards] = useState<Board[]>([]);
+  const [memberBoards, setMemberBoards] = useState<MemberBoard[]>([]);
   const [activeBoard, setActiveBoard] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
-
   const [loading, setLoading] = useState(true);
 
+  // ── Fetch authenticated user ─────────────────────────────────────────────
   async function fetchUser() {
     setLoading(true);
     try {
       const data = await getUserByToken();
-
-      if (data) {
-        setUser(data);
-      } else {
-        setUser(null);
-      }
-    } catch (err) {
-      // toast.error(err.message);
+      setUser(data ?? null);
+    } catch {
       setUser(null);
     } finally {
       setLoading(false);
     }
   }
 
-  async function getBoards() {
-    if (!loading && user?.id) {
-      try {
-        const data = await getAllBoards(user.id);
-        const memberBoardsData = await fetchBoardByUserId(user.id);
-        setBoards(data);
-        setMemberBoards(memberBoardsData);
-        setActiveBoard(data[0]?.id ?? null);
-      } catch (err) {
-        console.error("Failed to fetch boards:", err);
-      }
+  // ── Fetch boards for the current user ────────────────────────────────────
+  async function getBoards(userId: string) {
+    try {
+      const [ownedBoards, memberBoardsData] = await Promise.all([
+        getAllBoards(userId),
+        fetchBoardByUserId(userId),
+      ]);
+      setBoards(ownedBoards);
+      setMemberBoards(memberBoardsData);
+      // Only auto-select first board if nothing is active yet
+      setActiveBoard((prev) => prev ?? ownedBoards[0]?.id ?? null);
+    } catch (err: any) {
+      console.error("Failed to fetch boards:", err);
+      toast.error("Failed to load boards");
     }
   }
 
@@ -102,71 +89,73 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     fetchUser();
   }, []);
 
-  useEffect(() => {
-    getBoards();
-  }, [loading, user?.id]);
+  const hasFetchedBoards = useRef(false);
 
+  useEffect(() => {
+    if (!loading && user?.id && !hasFetchedBoards.current) {
+      hasFetchedBoards.current = true;
+      getBoards(user.id);
+    }
+  }, [loading, user?.id]);
+  // ── Board operations ─────────────────────────────────────────────────────
   async function updateBoardTitle(
     boardId: string,
     title: string,
-  ): Promise<undefined> {
+  ): Promise<void> {
+    if (!user) return;
     try {
-      const data = await updateBoard(boardId, { title, userId: user.id });
-      await getBoards();
-      toast.success("Title updated successfully");
-    } catch (err) {
-      console.error("Error in updating board title :" + err);
-      toast.error(err.message);
+      await updateBoard(boardId, { title, userId: user.id });
+      // Update local state optimistically instead of refetching everything
+      setBoards((prev) =>
+        prev.map((b) => (b.id === boardId ? { ...b, title } : b)),
+      );
+      toast.success("Board renamed");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to rename board");
     }
   }
 
   async function createBoard(title: string): Promise<Board | undefined> {
     if (!user) return;
     try {
-      const newBoard: Board = await addBoard(title, user.id);
-
-      await getBoards();
+      const newBoard = await addBoard(title, user.id);
+      setBoards((prev) => [...prev, newBoard]);
       setActiveBoard(newBoard.id);
-
       return newBoard;
-    } catch (err) {
-      console.error("Error in creating board :" + err);
-      toast.error(err.message);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create board");
     }
   }
 
   async function deleteBoard(boardId: string): Promise<boolean> {
     try {
-      const success = await deleteBoardService(boardId);
-
-      if (success) {
-        toast.success("Board deleted successfully");
-
-        // 1. Fetch fresh boards
-        await getBoards();
-
-        // 2. Reset activeBoard to null or the first available board
-        // This prevents the app from trying to render a deleted ID
-        setActiveBoard(null);
-
-        return true;
-      }
-
-      return false;
+      await deleteBoardService(boardId);
+      toast.success("Board deleted");
+      setBoards((prev) => {
+        const remaining = prev.filter((b) => b.id !== boardId);
+        // Auto-select next available board after deletion
+        setActiveBoard(remaining[0]?.id ?? null);
+        return remaining;
+      });
+      return true;
     } catch (err: any) {
       toast.error(err.message || "Failed to delete board");
       return false;
     }
   }
 
+  // ── Logout ────────────────────────────────────────────────────────────────
   async function logoutUser() {
     try {
-      const data = await logout();
-
+      hasFetchedBoards.current = false;
+      await logout();
+    } catch {
+      // Ignore logout API errors — clear state regardless
+    } finally {
       setUser(null);
-    } catch (err) {
-      console.error("Error in logout user : ", err);
-      toast.error(err.message);
+      setBoards([]);
+      setMemberBoards([]);
+      setActiveBoard(null);
     }
   }
 
